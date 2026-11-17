@@ -1,0 +1,21 @@
+TMDB EXPLORATORY DATA ANALYSIS REPORT
+==========================================
+
+source: TMDB API via Supabase
+analyzed_at: 2026-11-17T14:12:19.985651+00:00
+total_reviews: 349
+total_movies: 92
+sentiment_distribution: {'Positive': 135, 'Negative': 103, 'Neutral': 71, 'Unlabeled': 40}
+rated_reviews: 309
+missing_ratings: 40
+average_rating: 5.83
+average_word_count: 196.25
+median_word_count: 125.0
+empty_reviews: 0
+duplicate_review_ids: 0
+top_reviewed_movies: {'Project Hail Mary': 28, 'The Odyssey': 28, 'Spider-Man: Brand New Day': 19, 'Snow White': 18, 'The Dark Knight': 16, 'Resident Evil': 13, 'War of the Worlds': 10, 'Hope': 9, 'Piranha 3DD': 6, 'Cell': 6}
+
+INTERPRETATION
+Sentiment labels are approximate and derived from reviewer ratings.
+Collection trends show when our system first discovered reviews, not when reviews were published.
+Results describe the reviews currently stored in Supabase.
