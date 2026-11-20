@@ -6,3 +6,4 @@ seaborn>=0.13,<0.14
 streamlit>=1.45,<2
 python-dotenv>=1,<2
 supabase>=2,<3
+plotly>=6.0,<7
