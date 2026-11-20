@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import time
 
+import plotly.express as px
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
@@ -760,131 +761,104 @@ def styled_axes(ax):
     ax.yaxis.label.set_color("#CBD5E1")
     ax.grid(color="#24314B", alpha=0.45)
 
+def display_chart(fig, height=380):
 
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(
+            family="Arial",
+            color="#CBD5E1",
+            size=12
+        ),
+        height=height,
+        margin=dict(l=20, r=20, t=35, b=20),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.25,
+            xanchor="center",
+            x=0.5,
+            title_text=""
+        ),
+        hoverlabel=dict(
+            bgcolor="#1E293B",
+            font_color="#FFFFFF"
+        )
+    )
+
+    fig.update_xaxes(
+        showgrid=False,
+        zeroline=False
+    )
+
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor="#24314B",
+        zeroline=False
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={
+            "displayModeBar": True,
+            "scrollZoom": True
+        }
+    )
 
 def plot_trend_chart(data):
-    """Display review collection trends as grouped bars."""
 
-    # Count reviews by date and sentiment
     daily = (
         data.dropna(subset=["event_date"])
         .groupby(["event_date", "sentiment_label"])
         .size()
-        .unstack(fill_value=0)
-        .sort_index()
-        .tail(10)
+        .reset_index(name="reviews")
     )
 
-    fig, ax = plt.subplots(
-        figsize=(10, 4.5),
-        facecolor="#11192D"
-    )
+    daily["event_date"] = daily["event_date"].astype(str)
 
-    ax.set_facecolor("#11192D")
+    daily = daily.sort_values("event_date").tail(40)
 
     if daily.empty:
-        ax.text(
-            0.5, 0.5,
-            "No collection data available",
-            ha="center",
-            va="center",
-            color="#CBD5E1"
-        )
-        ax.axis("off")
+        st.info("No collection data available.")
+        return
 
-    else:
-        sentiments = [
-            "Positive",
-            "Negative",
-            "Neutral",
-            "Unlabeled"
-        ]
+    colors = {
+        "Positive": "#22C55E",
+        "Negative": "#F43F5E",
+        "Neutral": "#38BDF8",
+        "Unlabeled": "#64748B"
+    }
 
-        colors = {
-            "Positive": "#8B5CF6",
-            "Negative": "#F43F5E",
-            "Neutral": "#38BDF8",
-            "Unlabeled": "#64748B"
-        }
+    fig = px.bar(
+        daily,
+        x="event_date",
+        y="reviews",
+        color="sentiment_label",
+        barmode="group",
+        color_discrete_map=colors,
+        hover_data={"event_date": True, "reviews": True}
+    )
 
-        positions = list(range(len(daily)))
-        bar_width = 0.19
+    fig.update_layout(
+        xaxis_title="Collection Date",
+        yaxis_title="Number of Reviews"
+    )
 
-        for i, sentiment in enumerate(sentiments):
-
-            values = (
-                daily[sentiment]
-                if sentiment in daily.columns
-                else [0] * len(daily)
-            )
-
-            bar_positions = [
-                x + (i - 1.5) * bar_width
-                for x in positions
-            ]
-
-            ax.bar(
-                bar_positions,
-                values,
-                width=bar_width,
-                label=sentiment,
-                color=colors[sentiment],
-                alpha=0.95
-            )
-
-        # Axis styling
-        ax.set_xticks(positions)
-        ax.set_xticklabels([
-            pd.Timestamp(date).strftime("%d %b")
-            for date in daily.index
-        ])
-
-        ax.set_ylabel("Number of Reviews")
-
-        ax.grid(
-            axis="y",
-            color="#293551",
-            alpha=0.5
-        )
-
-        ax.set_axisbelow(True)
-
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-
-        ax.tick_params(colors="#CBD5E1")
-        ax.yaxis.label.set_color("#CBD5E1")
-
-        # Professional legend
-        legend = ax.legend(
-            loc="upper center",
-            bbox_to_anchor=(0.5, 1.14),
-            ncol=4,
-            frameon=False,
-            fontsize=9
-        )
-
-        for text in legend.get_texts():
-            text.set_color("#E5E7EB")
-
-    plt.tight_layout()
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
-
+    display_chart(fig)
 
 
 
 def plot_sentiment_donut(data):
-    """Display sentiment percentages as circular rings."""
-
-    from matplotlib.patches import Patch
 
     sentiments = [
         "Positive", "Negative", "Neutral", "Unlabeled"
     ]
 
     colors = {
-        "Positive": "#8B5CF6",
+        "Positive": "#22C55E",
         "Negative": "#F43F5E",
         "Neutral": "#38BDF8",
         "Unlabeled": "#64748B"
@@ -896,411 +870,276 @@ def plot_sentiment_donut(data):
         .reindex(sentiments, fill_value=0)
     )
 
-    total = int(counts.sum())
-
-    fig, ax = plt.subplots(
-        figsize=(5.5, 4.5),
-        facecolor="#11192D"
+    chart_data = (
+        counts.rename_axis("sentiment")
+        .reset_index(name="reviews")
     )
 
-    ax.set_facecolor("#11192D")
+    chart_data = chart_data[chart_data["reviews"] > 0]
 
-    if total == 0:
-        ax.text(
-            0, 0, "No reviews available",
-            ha="center", va="center",
-            color="#CBD5E1"
+    if chart_data.empty:
+        st.info("No sentiment data available.")
+        return
+
+    fig = px.pie(
+        chart_data,
+        names="sentiment",
+        values="reviews",
+        hole=0.68,
+        color="sentiment",
+        color_discrete_map=colors
+    )
+
+    fig.update_traces(
+        textposition="inside",
+        textinfo="percent",
+        hovertemplate=(
+            "<b>%{label}</b><br>"
+            "Reviews: %{value:,}<br>"
+            "Percentage: %{percent}"
+            "<extra></extra>"
         )
-    else:
-        # Draw four circular progress rings
-        for i, sentiment in enumerate(sentiments):
+    )
 
-            count = int(counts[sentiment])
-            radius = 1.0 - i * 0.18
+    fig.add_annotation(
+        text=f"<b>{int(counts.sum()):,}</b><br>REVIEWS",
+        x=0.5,
+        y=0.5,
+        showarrow=False,
+        font=dict(size=18, color="#FFFFFF")
+    )
 
-            ax.pie(
-                [count, total - count],
-                radius=radius,
-                startangle=90,
-                counterclock=False,
-                colors=[
-                    colors[sentiment],
-                    "#26334A"
-                ],
-                wedgeprops={
-                    "width": 0.12,
-                    "edgecolor": "#11192D",
-                    "linewidth": 2
-                }
-            )
+    fig.update_layout(showlegend=True)
 
-        # Total reviews in the center
-        ax.text(
-            0, 0.05, f"{total:,}",
-            ha="center", va="center",
-            fontsize=19,
-            fontweight="bold",
-            color="#FFFFFF"
-        )
-
-        ax.text(
-            0, -0.11, "REVIEWS",
-            ha="center", va="center",
-            fontsize=8,
-            color="#94A3B8"
-        )
-
-        # Legend showing actual percentages
-        legend_items = [
-            Patch(
-                facecolor=colors[sentiment],
-                label=(
-                    f"{sentiment}: "
-                    f"{counts[sentiment] / total * 100:.0f}%"
-                )
-            )
-            for sentiment in sentiments
-        ]
-
-        fig.legend(
-            handles=legend_items,
-            loc="lower center",
-            bbox_to_anchor=(0.5, 0.01),
-            ncol=2,
-            frameon=False,
-            labelcolor="#E5E7EB",
-            fontsize=9
-        )
-
-    ax.set_aspect("equal")
-    ax.axis("off")
-
-    plt.tight_layout(rect=[0, 0.15, 1, 1])
-
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
-
+    display_chart(fig, height=400)
 
 
 
 def plot_top_movies(data):
-    """Display top movies with modern horizontal bars."""
 
     top_movies = (
         data["movie_title"]
         .value_counts()
         .head(8)
+        .sort_values()
+        .rename_axis("movie_title")
+        .reset_index(name="reviews")
     )
-
-    fig, ax = plt.subplots(
-        figsize=(8, 4.5),
-        facecolor="#11192D"
-    )
-
-    ax.set_facecolor("#11192D")
 
     if top_movies.empty:
-        ax.text(
-            0.5, 0.5,
-            "No movies available",
-            ha="center",
-            va="center",
-            color="#CBD5E1"
-        )
-        ax.axis("off")
+        st.info("No movie data available.")
+        return
 
-    else:
-        # Shorten long movie titles for readability
-        movie_names = [
-            name[:25] + "..." if len(name) > 25 else name
-            for name in top_movies.index
-        ]
-
-        colors = [
+    fig = px.bar(
+        top_movies,
+        x="reviews",
+        y="movie_title",
+        orientation="h",
+        color="reviews",
+        color_continuous_scale=[
+            "#4338CA",
             "#8B5CF6",
-            "#7C3AED",
-            "#6366F1",
-            "#4F46E5",
-            "#818CF8",
-            "#6366F1",
-            "#7C3AED",
-            "#8B5CF6"
-        ]
+            "#38BDF8"
+        ],
+        text="reviews",
+        hover_data={
+            "movie_title": True,
+            "reviews": True
+        }
+    )
 
-        bars = ax.barh(
-            movie_names,
-            top_movies.values,
-            color=colors,
-            height=0.55
+    fig.update_traces(
+        textposition="outside",
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Total Reviews: %{x}"
+            "<extra></extra>"
         )
+    )
 
-        # Highest review count at the top
-        ax.invert_yaxis()
+    fig.update_layout(
+        xaxis_title="Number of Reviews",
+        yaxis_title="",
+        coloraxis_showscale=False
+    )
 
-        # Show review counts at the end of bars
-        for bar in bars:
-            width = bar.get_width()
-
-            ax.text(
-                width + 0.3,
-                bar.get_y() + bar.get_height() / 2,
-                f"{int(width)}",
-                va="center",
-                color="#E5E7EB",
-                fontsize=10
-            )
-
-        ax.set_xlim(
-            0,
-            max(top_movies.values) * 1.2 + 1
-        )
-
-        ax.set_xlabel(
-            "Number of Reviews",
-            color="#CBD5E1"
-        )
-
-        ax.grid(
-            axis="x",
-            color="#293551",
-            alpha=0.3
-        )
-
-        ax.set_axisbelow(True)
-
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-
-        ax.tick_params(
-            axis="both",
-            colors="#CBD5E1",
-            labelsize=9
-        )
-
-    plt.tight_layout()
-
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
+    display_chart(fig, height=420)
 
 
 def plot_rating_distribution(data):
-    """Show reviewer rating distribution."""
 
     ratings = pd.to_numeric(
         data["rating"],
         errors="coerce"
     ).dropna()
 
-    fig, ax = plt.subplots(
-        figsize=(8, 4.5),
-        facecolor="#11192D"
+    if ratings.empty:
+        st.info("No rating data available.")
+        return
+
+    fig = px.histogram(
+        x=ratings,
+        nbins=20,
+        range_x=[0, 10],
+        color_discrete_sequence=["#38BDF8"],
+        labels={
+            "x": "Movie Rating (0–10)",
+            "y": "Number of Reviews"
+        }
     )
 
-    ax.set_facecolor("#11192D")
-
-    if ratings.empty:
-        ax.text(
-            0.5, 0.5,
-            "No rated reviews available",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
-            color="#CBD5E1"
+    fig.update_traces(
+        marker_line_color="#11192D",
+        marker_line_width=1,
+        hovertemplate=(
+            "Rating: %{x}<br>"
+            "Reviews: %{y}"
+            "<extra></extra>"
         )
-    else:
-        ax.hist(
-            ratings,
-            bins=20,
-            range=(0, 10),
-            color="#8B5CF6",
-            edgecolor="#11192D"
-        )
+    )
 
-        ax.set_xlim(0, 10)
+    fig.add_vline(
+        x=float(ratings.median()),
+        line_dash="dash",
+        line_color="#F59E0B",
+        annotation_text=f"Median: {ratings.median():.1f}",
+        annotation_position="top"
+    )
 
-        ax.set_xlabel("Rating (0-10)")
-        ax.set_ylabel("Number of Reviews")
+    fig.update_layout(
+        title="Movie Rating Distribution",
+        xaxis_title="Movie Rating",
+        yaxis_title="Number of Reviews",
+        bargap=0.12
+    )
 
-        ax.grid(
-            axis="y",
-            color="#293551",
-            alpha=0.4
-        )
-
-        ax.set_axisbelow(True)
-
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    ax.tick_params(colors="#CBD5E1")
-    ax.xaxis.label.set_color("#CBD5E1")
-    ax.yaxis.label.set_color("#CBD5E1")
-
-    plt.tight_layout()
-
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
+    display_chart(fig, height=420)
 
 
 def plot_review_length_distribution(data):
-    """Show distribution of review lengths in words."""
 
-    word_counts = (
+    review_text = (
         data["review_text"]
         .fillna("")
         .astype(str)
+        .str.strip()
+    )
+
+    word_counts = (
+        review_text[review_text != ""]
         .str.split()
         .str.len()
     )
 
-    fig, ax = plt.subplots(
-        figsize=(8, 4.5),
-        facecolor="#11192D"
+    if word_counts.empty:
+        st.info("No review text available.")
+        return
+
+    length_data = pd.DataFrame({
+        "word_count": word_counts
+    })
+
+    fig = px.histogram(
+        length_data,
+        x="word_count",
+        nbins=30,
+        marginal="box",
+        color_discrete_sequence=["#8B5CF6"],
+        labels={
+            "word_count": "Number of Words"
+        }
     )
 
-    ax.set_facecolor("#11192D")
+    fig.update_layout(
+        title="Review Length Distribution",
+        xaxis_title="Number of Words per Review",
+        yaxis_title="Number of Reviews",
+        bargap=0.1
+    )
 
-    if word_counts.empty:
-        ax.text(
-            0.5, 0.5,
-            "No reviews available",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
-            color="#CBD5E1"
-        )
-    else:
-        ax.hist(
-            word_counts,
-            bins=20,
-            color="#38BDF8",
-            edgecolor="#11192D"
-        )
-
-        ax.set_xlabel("Number of Words")
-        ax.set_ylabel("Number of Reviews")
-
-        ax.grid(
-            axis="y",
-            color="#293551",
-            alpha=0.4
-        )
-
-        ax.set_axisbelow(True)
-
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    ax.tick_params(colors="#CBD5E1")
-    ax.xaxis.label.set_color("#CBD5E1")
-    ax.yaxis.label.set_color("#CBD5E1")
-
-    plt.tight_layout()
-
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
+    display_chart(fig, height=450)
 
 
 def plot_cumulative_collection(data):
-    """Show total collected reviews over time."""
 
-    collection_dates = pd.to_datetime(
+    dates = pd.to_datetime(
         data["first_seen_at"],
-        errors="coerce"
+        errors="coerce",
+        utc=True
     ).dropna()
 
-    fig, ax = plt.subplots(
-        figsize=(10, 4.5),
-        facecolor="#11192D"
+    if dates.empty:
+        st.info("No collection history available.")
+        return
+
+    daily_counts = (
+        dates.dt.floor("D")
+        .value_counts()
+        .sort_index()
     )
 
-    ax.set_facecolor("#11192D")
+    all_dates = pd.date_range(
+        start=daily_counts.index.min(),
+        end=daily_counts.index.max(),
+        freq="D",
+        tz="UTC"
+    )
 
-    if collection_dates.empty:
-        ax.text(
-            0.5, 0.5,
-            "No collection history available",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
-            color="#CBD5E1"
-        )
-        ax.axis("off")
+    daily_counts = daily_counts.reindex(
+        all_dates,
+        fill_value=0
+    )
 
-    else:
-        daily_counts = (
-            collection_dates.dt.floor("D")
-            .value_counts()
-            .sort_index()
-            .asfreq("D", fill_value=0)
-        )
+    cumulative_data = pd.DataFrame({
+        "collection_date": daily_counts.index,
+        "total_reviews": daily_counts.cumsum().values
+    })
 
-        cumulative = daily_counts.cumsum()
+    fig = px.area(
+        cumulative_data,
+        x="collection_date",
+        y="total_reviews",
+        color_discrete_sequence=["#8B5CF6"],
+        labels={
+            "collection_date": "Collection Date (UTC)",
+            "total_reviews": "Cumulative Reviews"
+        }
+    )
 
-        ax.plot(
-            cumulative.index,
-            cumulative.values,
+    fig.update_traces(
+        line=dict(
             color="#8B5CF6",
-            linewidth=2.5,
-            marker="o",
-            markersize=5
+            width=3
+        ),
+        fillcolor="rgba(139,92,246,0.18)",
+        mode="lines+markers",
+        marker=dict(size=5),
+        hovertemplate=(
+            "Date: %{x|%d %b %Y}<br>"
+            "Total Reviews: %{y:,}"
+            "<extra></extra>"
         )
+    )
 
-        ax.fill_between(
-            cumulative.index,
-            cumulative.values,
-            color="#8B5CF6",
-            alpha=0.15
-        )
+    fig.update_layout(
+        title="Cumulative Review Collection Trend",
+        xaxis_title="Collection Date",
+        yaxis_title="Total Collected Reviews"
+    )
 
-        ax.set_xlabel("Collection Date (UTC)")
-        ax.set_ylabel("Total Reviews Collected")
-
-        ax.grid(
-            axis="y",
-            color="#293551",
-            alpha=0.4
-        )
-
-        ax.set_axisbelow(True)
-
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-
-        ax.tick_params(colors="#CBD5E1")
-        ax.xaxis.label.set_color("#CBD5E1")
-        ax.yaxis.label.set_color("#CBD5E1")
-
-        fig.autofmt_xdate(rotation=30)
-
-    plt.tight_layout()
-
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
+    display_chart(fig, height=420)
 
 
 def plot_time_heatmap(data):
-    """Show review collection activity using colored tiles."""
 
-    from matplotlib.patches import FancyBboxPatch
-
-    # Use the timestamp when reviews were collected
     dates = pd.to_datetime(
         data["first_seen_at"],
         errors="coerce"
     ).dropna()
 
-    # Create a 6 x 7 activity matrix
-    activity = pd.DataFrame(
-        0,
-        index=range(6),
-        columns=range(7)
-    )
-
-    for date in dates:
-        day = date.weekday()
-        time_slot = date.hour // 4
-        activity.loc[time_slot, day] += 1
+    if dates.empty:
+        st.info("No activity data available.")
+        return
 
     days = [
         "Mon", "Tue", "Wed", "Thu",
@@ -1312,89 +1151,49 @@ def plot_time_heatmap(data):
         "12–16", "16–20", "20–24"
     ]
 
-    fig, ax = plt.subplots(
-        figsize=(8, 4.5),
-        facecolor="#11192D"
+    temp = pd.DataFrame({
+        "weekday": dates.dt.day_name().str[:3],
+        "time_slot": (dates.dt.hour // 4)
+    })
+
+    activity = pd.crosstab(
+        temp["time_slot"],
+        temp["weekday"]
+    ).reindex(
+        index=range(6),
+        columns=days,
+        fill_value=0
     )
 
-    ax.set_facecolor("#11192D")
-
-    max_count = activity.to_numpy().max()
-
-    # Draw individual rounded tiles
-    for row in range(6):
-        for col in range(7):
-
-            count = int(activity.loc[row, col])
-
-            if max_count == 0 or count == 0:
-                color = "#1B2640"
-            else:
-                intensity = count / max_count
-
-                if intensity < 0.25:
-                    color = "#303C81"
-                elif intensity < 0.50:
-                    color = "#4D54CB"
-                elif intensity < 0.75:
-                    color = "#6366F1"
-                else:
-                    color = "#8B5CF6"
-
-            tile = FancyBboxPatch(
-                (col + 0.06, row + 0.06),
-                0.88,
-                0.88,
-                boxstyle="round,pad=0.02,rounding_size=0.12",
-                linewidth=0,
-                facecolor=color
-            )
-
-            ax.add_patch(tile)
-
-            ax.text(
-                col + 0.5,
-                row + 0.5,
-                str(count),
-                ha="center",
-                va="center",
-                color="#FFFFFF",
-                fontsize=10,
-                fontweight="bold"
-            )
-
-    ax.set_xlim(0, 7)
-    ax.set_ylim(6, 0)
-
-    ax.set_xticks(
-        [i + 0.5 for i in range(7)]
-    )
-    ax.set_xticklabels(days)
-
-    ax.set_yticks(
-        [i + 0.5 for i in range(6)]
-    )
-    ax.set_yticklabels(time_labels)
-
-    ax.xaxis.tick_top()
-
-    ax.tick_params(
-        axis="both",
-        colors="#CBD5E1",
-        length=0,
-        labelsize=9,
-        pad=9
+    fig = px.imshow(
+        activity.to_numpy(),
+        x=days,
+        y=time_labels,
+        text_auto=True,
+        aspect="auto",
+        color_continuous_scale=[
+            "#11192D",
+            "#303C81",
+            "#6366F1",
+            "#A78BFA"
+        ],
+        labels={
+            "x": "Day",
+            "y": "Time",
+            "color": "Reviews"
+        }
     )
 
-    for spine in ax.spines.values():
-        spine.set_visible(False)
+    fig.update_traces(
+        hovertemplate=(
+            "Day: %{x}<br>"
+            "Time: %{y}<br>"
+            "Reviews: %{z}"
+            "<extra></extra>"
+        )
+    )
 
-    ax.set_aspect("auto")
-
-    plt.tight_layout()
-
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
+    display_chart(fig, height=400)
 
 
 
